@@ -13,6 +13,8 @@ bool QPSKDemodulatorApp::OnInit()
     frame->SetSize(800, 428);
 #elif _WIN32
     frame->SetSize(820, 450);
+#elif __APPLE__
+    frame->SetSize(820, 450);
 #endif
 
     // Constellation viewer
