@@ -15,8 +15,8 @@ This will require :
 
  Then, building is done by cmake :
  ```
-git clone https://github.com/altillimity/Baseband-Recorder.git
-cd Baseband-Recorder
+git clone https://github.com/altillimity/Standalone-Demodulators.git
+cd Standalone-Demodulators
 mkdir build && cd build
 cmake ..
 make -j2
