@@ -5,6 +5,8 @@ A few standalones demodulators replacing GNU Radio flowcharts. Still WIP! But us
 
 Simple QPSK demodulator containing presets for common VHF, L-Band and X-Band satellites.
 
+![Example while demodulating a MetOp AHRPT baseband](https://github.com/altillimity/Standalone-Demodulators/raw/master/images/QPSK.png)
+
 # Building
 
 This will require :
