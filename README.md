@@ -4,6 +4,23 @@ A few standalones demodulators replacing GNU Radio flowcharts. Still WIP! But us
 # QPSK Demodulator
 
 Simple QPSK demodulator containing presets for common VHF, L-Band and X-Band satellites.
+This includes :
+ - MetOp-A/B/C
+ - FengYun-3A/B/C
+ - SNPP, JPSS-1
+ - X-Band FengYun MPT
+ - FY3D
+ - Aqua
+ - and others!
+
+![Example while demodulating a MetOp AHRPT baseband](https://github.com/altillimity/Standalone-Demodulators/raw/master/images/QPSK.png)
+
+# C-BPSK Demodulator
+
+Simple BPSK (split phase with center carrier) demodulator containing presets for common L-Band satellites.
+This includes :
+ - METEOR-M2/N2-2
+ - NOAA 15 to 19
 
 ![Example while demodulating a MetOp AHRPT baseband](https://github.com/altillimity/Standalone-Demodulators/raw/master/images/QPSK.png)
 
