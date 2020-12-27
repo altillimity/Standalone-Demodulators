@@ -107,13 +107,13 @@ private:
     void finalWriteThreadFunction();
 
 private:
-    std::thread fileThread;
-    std::thread agcThread;
-    std::thread rrcThread;
-    std::thread pllThread;
-    std::thread clockrecoveryThread;
-    std::thread dcBlockThread;
-    std::thread finalWriteThread;
+    std::thread *fileThread;
+    std::thread *agcThread;
+    std::thread *rrcThread;
+    std::thread *pllThread;
+    std::thread *clockrecoveryThread;
+    std::thread *dcBlockThread;
+    std::thread *finalWriteThread;
 };
 
 class QPSKDemodulatorFrame : public wxFrame

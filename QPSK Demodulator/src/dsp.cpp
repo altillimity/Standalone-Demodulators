@@ -79,14 +79,14 @@ void QPSKDemodulatorApp::startDSP()
     delay_one_imag = new DelayOneImag();
 
     // Start everything
-    fileThread = std::thread(&QPSKDemodulatorApp::fileThreadFunction, this);
+    fileThread = new std::thread(&QPSKDemodulatorApp::fileThreadFunction, this);
     if (dc_block)
-        dcBlockThread = std::thread(&QPSKDemodulatorApp::dcBlockThreadFunction, this);
-    agcThread = std::thread(&QPSKDemodulatorApp::agcThreadFunction, this);
-    rrcThread = std::thread(&QPSKDemodulatorApp::rrcThreadFunction, this);
-    pllThread = std::thread(&QPSKDemodulatorApp::pllThreadFunction, this);
-    clockrecoveryThread = std::thread(&QPSKDemodulatorApp::clockrecoveryThreadFunction, this);
-    finalWriteThread = std::thread(&QPSKDemodulatorApp::finalWriteThreadFunction, this);
+        dcBlockThread = new std::thread(&QPSKDemodulatorApp::dcBlockThreadFunction, this);
+    agcThread = new std::thread(&QPSKDemodulatorApp::agcThreadFunction, this);
+    rrcThread = new std::thread(&QPSKDemodulatorApp::rrcThreadFunction, this);
+    pllThread = new std::thread(&QPSKDemodulatorApp::pllThreadFunction, this);
+    clockrecoveryThread = new std::thread(&QPSKDemodulatorApp::clockrecoveryThreadFunction, this);
+    finalWriteThread = new std::thread(&QPSKDemodulatorApp::finalWriteThreadFunction, this);
 }
 
 void QPSKDemodulatorApp::fileThreadFunction()
