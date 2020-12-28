@@ -124,3 +124,21 @@ bool CBPSKDemodulatorApp::OnInit()
 
     return true;
 }
+
+void CBPSKDemodulatorApp::updateProgress(int current, int total)
+{
+    int percent = abs(round(((float)current / (float)total) * 1000.0f) / 10.0f);
+
+    wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
+        progressbar->SetValue(percent);
+        progressLabel->SetLabelText(std::string("Progress : " + std::to_string(percent) + "%, Frames : " + std::to_string(meteorMode ? frame_count : frame_count / 11090) + "   "));
+        drawPane->Refresh();
+    });
+}
+
+void CBPSKDemodulatorApp::done()
+{
+    wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
+        startButton->Enable();
+    });
+}

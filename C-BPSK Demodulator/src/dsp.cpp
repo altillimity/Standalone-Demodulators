@@ -2,7 +2,7 @@
 
 #include "utils.h"
 
-void CBPSKDemodulatorApp::initDSP()
+void CBPSKDemodulatorDsp::initDSP(function pProgressCallback, function pDoneCallback)
 {
     // Buffers
     buffer = new std::complex<float>[BUFFER_SIZE * 10];
@@ -29,9 +29,13 @@ void CBPSKDemodulatorApp::initDSP()
     pll_pipe = new libdsp::Pipe<float>(BUFFER_SIZE);
     rrc_pipe = new libdsp::Pipe<float>(BUFFER_SIZE);
     recovery_pipe = new libdsp::Pipe<float>(BUFFER_SIZE);
+
+    // Callbacks
+    progressCallback = pProgressCallback;
+    doneCallback = pDoneCallback;
 }
 
-void CBPSKDemodulatorApp::destroyDSP()
+void CBPSKDemodulatorDsp::destroyDSP()
 {
     delete[] buffer;
     delete[] agc_buffer;
@@ -53,25 +57,23 @@ void CBPSKDemodulatorApp::destroyDSP()
     delete file_pipe, agc_pipe, front_rrc_pipe, pll_pipe, pll_pipe, recovery_pipe;
 }
 
-void CBPSKDemodulatorApp::startDSP()
+void CBPSKDemodulatorDsp::startDSP(std::string inputFilePath,
+                                   std::string outputFilePath,
+                                   bool optionF32,
+                                   bool optionI16,
+                                   bool optionI8,
+                                   bool optionW8,
+                                   float samplerate,
+                                   float symbolrate,
+                                   float rrc_alpha,
+                                   float rrc_taps,
+                                   bool noaaMode,
+                                   bool meteorMode)
 {
     // Read startup variables
     data_in_filesize = getFilesize(inputFilePath);
     data_in = std::ifstream(inputFilePath, std::ios::binary);
     data_out = std::ofstream(outputFilePath, std::ios::binary);
-
-    f32 = optionF32->GetValue();
-    i16 = optionI16->GetValue();
-    i8 = optionI8->GetValue();
-    w8 = optionW8->GetValue();
-
-    samplerate = std::stof((std::string)samplerateEntry->GetValue());
-    symbolrate = std::stof((std::string)symbolrateEntry->GetValue());
-    rrc_alpha = std::stof((std::string)rrcAlphaEntry->GetValue());
-    rrc_taps = std::stof((std::string)rrcTapsEntry->GetValue());
-
-    noaa_deframer = noaaDeframerOption->IsChecked();
-    rrc_filter = frontRRCOption->IsChecked();
 
     // Init our blocks
     agc = new libdsp::AgcCC(meteorMode ? 0.0038e-3f : 0.002e-3f, 1.0f, 0.5f / 32768.0f, 65536);
@@ -84,17 +86,17 @@ void CBPSKDemodulatorApp::startDSP()
     noise_source = new libdsp::NoiseSource(libdsp::NS_GAUSSIAN, 0.2f, 0);
 
     // Start everything
-    fileThread = new std::thread(&CBPSKDemodulatorApp::fileThreadFunction, this);
-    agcThread = new std::thread(&CBPSKDemodulatorApp::agcThreadFunction, this);
+    fileThread = new std::thread(&CBPSKDemodulatorDsp::fileThreadFunction, this);
+    agcThread = new std::thread(&CBPSKDemodulatorDsp::agcThreadFunction, this);
     if (rrc_filter)
-        frontRrcThread = new std::thread(&CBPSKDemodulatorApp::frontRrcThreadFunction, this);
-    rrcThread = new std::thread(&CBPSKDemodulatorApp::rrcThreadFunction, this);
-    pllThread = new std::thread(&CBPSKDemodulatorApp::pllThreadFunction, this);
-    clockrecoveryThread = new std::thread(&CBPSKDemodulatorApp::clockrecoveryThreadFunction, this);
-    finalWriteThread = new std::thread(&CBPSKDemodulatorApp::finalWriteThreadFunction, this);
+        frontRrcThread = new std::thread(&CBPSKDemodulatorDsp::frontRrcThreadFunction, this);
+    rrcThread = new std::thread(&CBPSKDemodulatorDsp::rrcThreadFunction, this);
+    pllThread = new std::thread(&CBPSKDemodulatorDsp::pllThreadFunction, this);
+    clockrecoveryThread = new std::thread(&CBPSKDemodulatorDsp::clockrecoveryThreadFunction, this);
+    finalWriteThread = new std::thread(&CBPSKDemodulatorDsp::finalWriteThreadFunction, this);
 }
 
-void CBPSKDemodulatorApp::fileThreadFunction()
+void CBPSKDemodulatorDsp::fileThreadFunction()
 {
     while (!data_in.eof())
     {
@@ -137,7 +139,7 @@ void CBPSKDemodulatorApp::fileThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::agcThreadFunction()
+void CBPSKDemodulatorDsp::agcThreadFunction()
 {
     int gotten;
     while (true)
@@ -154,7 +156,7 @@ void CBPSKDemodulatorApp::agcThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::frontRrcThreadFunction()
+void CBPSKDemodulatorDsp::frontRrcThreadFunction()
 {
     int gotten;
     while (true)
@@ -171,7 +173,7 @@ void CBPSKDemodulatorApp::frontRrcThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::pllThreadFunction()
+void CBPSKDemodulatorDsp::pllThreadFunction()
 {
     int gotten;
     while (true)
@@ -188,7 +190,7 @@ void CBPSKDemodulatorApp::pllThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::rrcThreadFunction()
+void CBPSKDemodulatorDsp::rrcThreadFunction()
 {
     int gotten;
     while (true)
@@ -209,7 +211,7 @@ void CBPSKDemodulatorApp::rrcThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::clockrecoveryThreadFunction()
+void CBPSKDemodulatorDsp::clockrecoveryThreadFunction()
 {
     int gotten;
     while (true)
@@ -266,7 +268,7 @@ void volk_32f_binary_slicer_8i_generic(int8_t *cVector, const float *aVector, un
     }
 }
 
-void CBPSKDemodulatorApp::finalWriteThreadFunction()
+void CBPSKDemodulatorDsp::finalWriteThreadFunction()
 {
     int dat_size, frame_count = 0;
     while (true)
@@ -309,19 +311,13 @@ void CBPSKDemodulatorApp::finalWriteThreadFunction()
                 data_out.write((char *)&bytes[0], bytes.size());
         }
 
-        int percent = abs(round(((float)data_in.tellg() / (float)data_in_filesize) * 1000.0f) / 10.0f);
-
-        wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
-            progressbar->SetValue(percent);
-            progressLabel->SetLabelText(std::string("Progress : " + std::to_string(percent) + "%, Frames : " + std::to_string(meteorMode ? frame_count : frame_count / 11090) + "   "));
-            drawPane->Refresh();
-        });
+        if (progressCallback)
+            progressCallback(data_in.tellg(), data_in_filesize);
     }
 
     data_in.close();
     data_out.close();
 
-    wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
-        startButton->Enable();
-    });
+    if (doneCallback)
+        doneCallback();
 }

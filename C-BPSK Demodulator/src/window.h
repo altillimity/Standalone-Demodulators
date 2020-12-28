@@ -45,19 +45,8 @@ public:
 
 private:
     std::string inputFilePath, outputFilePath;
-    size_t data_in_filesize;
-    std::ifstream data_in;
-    std::ofstream data_out;
-    bool noaaMode = false;
-    bool meteorMode = false;
-    bool f32, i16, i8, w8;
-    float samplerate, symbolrate, rrc_alpha, rrc_taps;
-    bool noaa_deframer, rrc_filter;
-
-private:
-    void initDSP();
-    void startDSP();
-    void destroyDSP();
+    void updateProgress(int current, int total);
+    void done();
 
 private:
     // All buffers we use along the way
@@ -91,6 +80,7 @@ private:
     libdsp::ClockRecoveryMMFF *clock_recovery;
     libdsp::NoiseSource *noise_source;
     NOAADeframer *noaa_deframer_blk;
+    
 
 private:
     // All FIFOs we use along the way
@@ -100,6 +90,31 @@ private:
     libdsp::Pipe<float> *pll_pipe;
     libdsp::Pipe<float> *rrc_pipe;
     libdsp::Pipe<float> *recovery_pipe;
+};
+
+class CBPSKDemodulatorFrame : public wxFrame
+{
+public:
+    CBPSKDemodulatorFrame();
+};
+
+class CBPSKDemodulatorDsp
+{
+public:
+    void initDSP(function progressCallback, function doneCallback);
+    void startDSP(std::string inputFilePath,
+                  std::string outputFilePath,
+                  bool optionF32,
+                  bool optionI16,
+                  bool optionI8,
+                  bool optionW8,
+                  float samplerate,
+                  float symbolrate,
+                  float rrc_alpha,
+                  float rrc_taps,
+                  bool noaaMode,
+                  bool meteorMode);
+    void destroyDSP();
 
 private:
     void fileThreadFunction();
@@ -109,6 +124,8 @@ private:
     void rrcThreadFunction();
     void clockrecoveryThreadFunction();
     void finalWriteThreadFunction();
+    void (*progressCallback)(int, int);
+    void (*doneCallback)();
 
 private:
     std::thread *fileThread;
@@ -118,10 +135,10 @@ private:
     std::thread *rrcThread;
     std::thread *clockrecoveryThread;
     std::thread *finalWriteThread;
-};
-
-class CBPSKDemodulatorFrame : public wxFrame
-{
-public:
-    CBPSKDemodulatorFrame();
-};
+    bool f32, i16, i8, w8;
+    float samplerate, symbolrate, rrc_alpha, rrc_taps;
+    size_t data_in_filesize;
+    std::ifstream data_in;
+    std::ofstream data_out;
+    bool noaa_deframer, rrc_filter;
+}
