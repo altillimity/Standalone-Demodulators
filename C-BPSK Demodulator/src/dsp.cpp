@@ -1,8 +1,12 @@
 #include "window.h"
-
+#include <functional>
 #include "utils.h"
+#include "dsp.h"
 
-void CBPSKDemodulatorDsp::initDSP(function pProgressCallback, function pDoneCallback)
+void CBPSKDemodulatorDsp::initDSP(
+    std::function<void(int, int, int)> pProgressCallback,
+    std::function<void(void)> pDoneCallback,
+    std::function<void(int8_t, int8_t, int)> pConstellationCallback)
 {
     // Buffers
     buffer = new std::complex<float>[BUFFER_SIZE * 10];
@@ -33,6 +37,7 @@ void CBPSKDemodulatorDsp::initDSP(function pProgressCallback, function pDoneCall
     // Callbacks
     progressCallback = pProgressCallback;
     doneCallback = pDoneCallback;
+    constellationCallback = pConstellationCallback;
 }
 
 void CBPSKDemodulatorDsp::destroyDSP()
@@ -67,13 +72,15 @@ void CBPSKDemodulatorDsp::startDSP(std::string inputFilePath,
                                    float symbolrate,
                                    float rrc_alpha,
                                    float rrc_taps,
-                                   bool noaaMode,
-                                   bool meteorMode)
+                                   bool pNoaa_deframer,
+                                   bool pRrc_filter)
 {
     // Read startup variables
     data_in_filesize = getFilesize(inputFilePath);
     data_in = std::ifstream(inputFilePath, std::ios::binary);
     data_out = std::ofstream(outputFilePath, std::ios::binary);
+    noaa_deframer = pNoaa_deframer;
+    rrc_filter = pRrc_filter;
 
     // Init our blocks
     agc = new libdsp::AgcCC(meteorMode ? 0.0038e-3f : 0.002e-3f, 1.0f, 0.5f / 32768.0f, 65536);
@@ -284,10 +291,9 @@ void CBPSKDemodulatorDsp::finalWriteThreadFunction()
         {
             int8_t symb_real = clamp(recovered_buffer[i] * 90);
 
-            if (i < 1024)
+            if (constellationCallback && (i < 1024))
             {
-                drawPane->constellation_buffer[i * 2] = noise_buffer[i] * 80;
-                drawPane->constellation_buffer[i * 2 + 1] = symb_real;
+                constellationCallback(noise_buffer[i] * 80, symb_real, i);
             }
         }
 
@@ -312,7 +318,7 @@ void CBPSKDemodulatorDsp::finalWriteThreadFunction()
         }
 
         if (progressCallback)
-            progressCallback(data_in.tellg(), data_in_filesize);
+            progressCallback(data_in.tellg(), data_in_filesize, frame_count);
     }
 
     data_in.close();
