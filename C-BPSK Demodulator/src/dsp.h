@@ -57,7 +57,7 @@ private:
 
     bool noaa_deframer = false;
     bool rrc_filter = false;
-    bool noaaMode, meteorMode;
+    bool noaaMode = false, meteorMode = false;
 
 private:
     std::thread *fileThread;

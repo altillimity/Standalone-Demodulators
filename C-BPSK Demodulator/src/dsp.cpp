@@ -80,6 +80,8 @@ void CBPSKDemodulatorDsp::startDSP(std::string inputFilePath,
     data_in = std::ifstream(inputFilePath, std::ios::binary);
     data_out = std::ofstream(outputFilePath, std::ios::binary);
     noaa_deframer = pNoaa_deframer;
+    noaaMode = pNoaa_deframer;
+    meteorMode = !pNoaa_deframer;
     rrc_filter = pRrc_filter;
 
     // Init our blocks
@@ -101,6 +103,11 @@ void CBPSKDemodulatorDsp::startDSP(std::string inputFilePath,
     pllThread = new std::thread(&CBPSKDemodulatorDsp::pllThreadFunction, this);
     clockrecoveryThread = new std::thread(&CBPSKDemodulatorDsp::clockrecoveryThreadFunction, this);
     finalWriteThread = new std::thread(&CBPSKDemodulatorDsp::finalWriteThreadFunction, this);
+
+    f32 = optionF32;
+    i16 = optionI16;
+    i8 = optionI8;
+    w8 = optionW8;
 }
 
 void CBPSKDemodulatorDsp::fileThreadFunction()
@@ -318,7 +325,7 @@ void CBPSKDemodulatorDsp::finalWriteThreadFunction()
         }
 
         if (progressCallback)
-            progressCallback(data_in.tellg(), data_in_filesize, frame_count);
+            progressCallback((size_t)data_in.tellg(), data_in_filesize, frame_count / 11090); // Each frame is 11090 bytes
     }
 
     data_in.close();

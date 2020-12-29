@@ -31,7 +31,8 @@ void done()
 
 void progress(size_t c, size_t t, size_t fc)
 {
-  fprintf(stderr, "%lu/%lu - %lu      \r", c, t, fc);
+  //fprintf(stderr, "%lu/%lu - %lu      \r", c, t, fc);
+  std::cerr << c << "/" << t << " - " << fc << "                     \r"; // Changed
 }
 
 int main(int argc, char **argv)
@@ -115,7 +116,7 @@ int main(int argc, char **argv)
   bool optionI8 = 0;
   bool optionW8 = 0;
 
-  int samplerateEntry = 3000000;
+  int samplerateEntry = 6000000;
   int symbolrateEntry = 665400;
   float rrcAlphaEntry = 0.5;
   float rrcTapsEntry = 31;
@@ -129,8 +130,8 @@ int main(int argc, char **argv)
     frontRRCOption = true;
   }
 
-  dsp->startDSP(infile,
-                outfile,
+  dsp->startDSP(std::string(infile),
+                std::string(outfile),
                 optionF32,
                 optionI16,
                 optionI8,
