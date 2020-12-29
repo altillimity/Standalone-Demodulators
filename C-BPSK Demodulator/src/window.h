@@ -47,7 +47,7 @@ public:
 private:
     CBPSKDemodulatorDsp *dsp;
     std::string inputFilePath, outputFilePath;
-    void updateProgress(int current, int total, int frame_count);
+    void updateProgress(size_t current, size_t total, size_t frame_count);
     void done();
     void updateConstellation(int8_t a, int8_t b, int i);
     bool noaaMode, meteorMode;

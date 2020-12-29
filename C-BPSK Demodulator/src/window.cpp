@@ -141,7 +141,7 @@ bool CBPSKDemodulatorApp::OnInit()
     return true;
 }
 
-void CBPSKDemodulatorApp::updateProgress(int current, int total, int frame_count)
+void CBPSKDemodulatorApp::updateProgress(size_t current, size_t total, size_t frame_count)
 {
     int percent = abs(round(((float)current / (float)total) * 1000.0f) / 10.0f);
 

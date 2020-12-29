@@ -26,7 +26,7 @@ class CBPSKDemodulatorDsp
 {
 public:
     void initDSP(
-        std::function<void(int, int, int)> pProgressCallback,
+        std::function<void(size_t, size_t, size_t)> pProgressCallback,
         std::function<void(void)> pDoneCallback,
         std::function<void(int8_t, int8_t, int)> pConstellationCallback);
     void startDSP(std::string inputFilePath,

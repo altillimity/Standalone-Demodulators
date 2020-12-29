@@ -4,7 +4,7 @@
 #include "dsp.h"
 
 void CBPSKDemodulatorDsp::initDSP(
-    std::function<void(int, int, int)> pProgressCallback,
+    std::function<void(size_t, size_t, size_t)> pProgressCallback,
     std::function<void(void)> pDoneCallback,
     std::function<void(int8_t, int8_t, int)> pConstellationCallback)
 {
