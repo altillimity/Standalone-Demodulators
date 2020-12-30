@@ -1,8 +1,13 @@
-#include "window.h"
-
 #include "utils.h"
+#include "dsp.h"
+#ifdef _WIN32
+#include <io.h>
+#endif
 
-void QPSKDemodulatorApp::initDSP()
+void QPSKDemodulatorDSP::initDSP(
+    std::function<void(int)> pProgressCallback,
+    std::function<void(void)> pDoneCallback,
+    std::function<void(int8_t, int8_t, int)> pConstellationCallback)
 {
     // Buffers
     buffer = new std::complex<float>[BUFFER_SIZE * 10];
@@ -29,7 +34,7 @@ void QPSKDemodulatorApp::initDSP()
     post_reco_pipe = new libdsp::Pipe<std::complex<float>>(BUFFER_SIZE);
 }
 
-void QPSKDemodulatorApp::destroyDSP()
+void QPSKDemodulatorDSP::destroyDSP()
 {
     delete[] buffer;
     delete[] buffer2;
@@ -49,26 +54,61 @@ void QPSKDemodulatorApp::destroyDSP()
     delete dc_pipe, pre_agc_pipe, post_agc_pipe, pre_pll_pipe, post_pll_pipe, post_reco_pipe;
 }
 
-void QPSKDemodulatorApp::startDSP()
+void QPSKDemodulatorDSP::startDSP(
+    std::string inputFilePath,
+    std::string outputFilePath,
+    bool optionF32,
+    bool optionI16,
+    bool optionI8,
+    bool optionW8,
+    int sampleRateEntry,
+    int symbolRateEntry,
+    float rrcAlphaEntry,
+    float rrcTapsEntry,
+    float loopBwEntry,
+    bool hardSymbolsOption,
+    bool dcBlockOption,
+    bool aquaModeEntry,
+    bool hrptModeEntry)
 {
-    // Read startup variables
-    data_in_filesize = getFilesize(inputFilePath);
-    data_in = std::ifstream(inputFilePath, std::ios::binary);
-    data_out = std::ofstream(outputFilePath, std::ios::binary);
+    data_in_filesize = 0;
+    if (inputFilePath.compare("-") != 0)
+    {
+        data_in_filesize = getFilesize(inputFilePath);
+        freopen(inputFilePath.c_str(), "rb", stdin); // redirects standard input
+    }
+    else
+    {
+#ifdef _WIN32
+        _setmode(_fileno(stdin), O_BINARY);
+#endif
+    }
+    if (outputFilePath.compare("-") != 0)
+    {
+        freopen(outputFilePath.c_str(), "wb", stdout); // redirects standard output
+    }
+    else
+    {
+#ifdef _WIN32
+        _setmode(_fileno(stdout), O_BINARY);
+#endif
+    }
 
-    f32 = optionF32->GetValue();
-    i16 = optionI16->GetValue();
-    i8 = optionI8->GetValue();
-    w8 = optionW8->GetValue();
+    f32 = optionF32;
+    i16 = optionI16;
+    i8 = optionI8;
+    w8 = optionW8;
 
-    samplerate = std::stof((std::string)samplerateEntry->GetValue());
-    symbolrate = std::stof((std::string)symbolrateEntry->GetValue());
-    rrc_alpha = std::stof((std::string)rrcAlphaEntry->GetValue());
-    rrc_taps = std::stof((std::string)rrcTapsEntry->GetValue());
-    loop_bw = std::stof((std::string)loopBwEntry->GetValue());
+    samplerate = sampleRateEntry;
+    symbolrate = symbolRateEntry;
+    rrc_alpha = rrcAlphaEntry;
+    rrc_taps = rrcTapsEntry;
+    loop_bw = loopBwEntry;
 
-    hard_symbs = hardSymbolsOption->IsChecked();
-    dc_block = dcBlockOption->IsChecked();
+    hard_symbs = hardSymbolsOption;
+    dc_block = dcBlockOption;
+    aquaMode = aquaModeEntry;
+    hrptMode = hrptModeEntry;
 
     // Init our blocks
     agc = new libdsp::AgcCC(aquaMode ? 0.1f : hrptMode ? 0.00001f : 0.0001f, 1.0f, 1.0f, 65536); // Aqua requires a different mode...
@@ -79,28 +119,28 @@ void QPSKDemodulatorApp::startDSP()
     delay_one_imag = new DelayOneImag();
 
     // Start everything
-    fileThread = new std::thread(&QPSKDemodulatorApp::fileThreadFunction, this);
+    fileThread = new std::thread(&QPSKDemodulatorDSP::fileThreadFunction, this);
     if (dc_block)
-        dcBlockThread = new std::thread(&QPSKDemodulatorApp::dcBlockThreadFunction, this);
-    agcThread = new std::thread(&QPSKDemodulatorApp::agcThreadFunction, this);
-    rrcThread = new std::thread(&QPSKDemodulatorApp::rrcThreadFunction, this);
-    pllThread = new std::thread(&QPSKDemodulatorApp::pllThreadFunction, this);
-    clockrecoveryThread = new std::thread(&QPSKDemodulatorApp::clockrecoveryThreadFunction, this);
-    finalWriteThread = new std::thread(&QPSKDemodulatorApp::finalWriteThreadFunction, this);
+        dcBlockThread = new std::thread(&QPSKDemodulatorDSP::dcBlockThreadFunction, this);
+    agcThread = new std::thread(&QPSKDemodulatorDSP::agcThreadFunction, this);
+    rrcThread = new std::thread(&QPSKDemodulatorDSP::rrcThreadFunction, this);
+    pllThread = new std::thread(&QPSKDemodulatorDSP::pllThreadFunction, this);
+    clockrecoveryThread = new std::thread(&QPSKDemodulatorDSP::clockrecoveryThreadFunction, this);
+    finalWriteThread = new std::thread(&QPSKDemodulatorDSP::finalWriteThreadFunction, this);
 }
 
-void QPSKDemodulatorApp::fileThreadFunction()
+void QPSKDemodulatorDSP::fileThreadFunction()
 {
-    while (!data_in.eof())
+    while (!std::cin.eof())
     {
         // Get baseband, possibly convert to F32
         if (f32)
         {
-            data_in.read((char *)buffer, BUFFER_SIZE * sizeof(std::complex<float>));
+            std::cin.read((char *)buffer, BUFFER_SIZE * sizeof(std::complex<float>));
         }
         else if (i16)
         {
-            data_in.read((char *)buffer_i16, BUFFER_SIZE * sizeof(int16_t) * 2);
+            std::cin.read((char *)buffer_i16, BUFFER_SIZE * sizeof(int16_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 using namespace std::complex_literals;
@@ -109,7 +149,7 @@ void QPSKDemodulatorApp::fileThreadFunction()
         }
         else if (i8)
         {
-            data_in.read((char *)buffer_i8, BUFFER_SIZE * sizeof(int8_t) * 2);
+            std::cin.read((char *)buffer_i8, BUFFER_SIZE * sizeof(int8_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 using namespace std::complex_literals;
@@ -118,7 +158,7 @@ void QPSKDemodulatorApp::fileThreadFunction()
         }
         else if (w8)
         {
-            data_in.read((char *)buffer_u8, BUFFER_SIZE * sizeof(uint8_t) * 2);
+            std::cin.read((char *)buffer_u8, BUFFER_SIZE * sizeof(uint8_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 float imag = (buffer_u8[i * 2] - 127) * 0.004f;
@@ -135,7 +175,7 @@ void QPSKDemodulatorApp::fileThreadFunction()
     }
 }
 
-void QPSKDemodulatorApp::agcThreadFunction()
+void QPSKDemodulatorDSP::agcThreadFunction()
 {
     int gotten;
     while (true)
@@ -152,7 +192,7 @@ void QPSKDemodulatorApp::agcThreadFunction()
     }
 }
 
-void QPSKDemodulatorApp::rrcThreadFunction()
+void QPSKDemodulatorDSP::rrcThreadFunction()
 {
     int gotten;
     while (true)
@@ -169,7 +209,7 @@ void QPSKDemodulatorApp::rrcThreadFunction()
     }
 }
 
-void QPSKDemodulatorApp::pllThreadFunction()
+void QPSKDemodulatorDSP::pllThreadFunction()
 {
     int gotten;
     while (true)
@@ -189,7 +229,7 @@ void QPSKDemodulatorApp::pllThreadFunction()
     }
 }
 
-void QPSKDemodulatorApp::clockrecoveryThreadFunction()
+void QPSKDemodulatorDSP::clockrecoveryThreadFunction()
 {
     int gotten;
     while (true)
@@ -206,7 +246,7 @@ void QPSKDemodulatorApp::clockrecoveryThreadFunction()
     }
 }
 
-void QPSKDemodulatorApp::dcBlockThreadFunction()
+void QPSKDemodulatorDSP::dcBlockThreadFunction()
 {
     int gotten;
     while (true)
@@ -223,7 +263,7 @@ void QPSKDemodulatorApp::dcBlockThreadFunction()
     }
 }
 
-void QPSKDemodulatorApp::finalWriteThreadFunction()
+void QPSKDemodulatorDSP::finalWriteThreadFunction()
 {
     int dat_size;
     while (true)
@@ -238,35 +278,24 @@ void QPSKDemodulatorApp::finalWriteThreadFunction()
             int8_t symb_real = clamp(recovered_buffer[i].real() * 100);
             int8_t symb_imag = clamp(recovered_buffer[i].imag() * 100);
 
-            if (i < 1024)
+            if (constellationCallback && (i < 1024))
             {
-                drawPane->constellation_buffer[i * 2 + 1] = symb_real;
-                drawPane->constellation_buffer[i * 2] = symb_imag;
+                constellationCallback(symb_real, symb_imag, i);
             }
 
             if (!hard_symbs)
             {
-                data_out.put(symb_imag);
-                data_out.put(symb_real);
+                std::cout.put(symb_imag);
+                std::cout.put(symb_real);
             }
         }
 
         if (hard_symbs)
-            data_out.write((char *)recovered_buffer, dat_size * sizeof(std::complex<float>));
+            std::cout.write((char *)recovered_buffer, dat_size * sizeof(std::complex<float>));
 
-        int percent = abs(round(((float)data_in.tellg() / (float)data_in_filesize) * 1000.0f) / 10.0f);
+        int percent = abs(round(((float)std::cin.tellg() / (float)data_in_filesize) * 1000.0f) / 10.0f);
 
-        wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
-            progressbar->SetValue(percent);
-            progressLabel->SetLabelText(std::string("Progress : " + std::to_string(percent) + "%"));
-            drawPane->Refresh();
-        });
+        if (progressCallback)
+            progressCallback(percent);
     }
-
-    data_in.close();
-    data_out.close();
-
-    wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
-        startButton->Enable();
-    });
 }

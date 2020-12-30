@@ -1,6 +1,6 @@
 #include <complex>
 #include <vector>
-
+#pragma once
 class DelayOneImag
 {
 public:
