@@ -26,12 +26,12 @@ void usage(FILE *fp, const char *path)
 
 void done()
 {
+  std::cerr << "Finished\n\n";
   doneProcessing = 1;
 }
 
 void progress(size_t c, size_t t, size_t fc)
 {
-  //fprintf(stderr, "%lu/%lu - %lu      \r", c, t, fc);
   std::cerr << c << "/" << t << " - " << fc << "                     \r"; // Changed
 }
 
@@ -106,9 +106,6 @@ int main(int argc, char **argv)
   fprintf(stderr, "Preset: %d\n\n", preset);
 
   auto dsp = new CBPSKDemodulatorDsp();
-  // auto up = std::bind(&CBPSKDemodulatorApp::updateProgress, this, _1, _2, _3);
-  // auto d = std::bind(&CBPSKDemodulatorApp::done, this);
-  // auto uc = std::bind(&CBPSKDemodulatorApp::updateConstellation, this, _1, _2, _3);
   dsp->initDSP(progress, done, NULL);
 
   bool optionF32 = 0;
@@ -145,7 +142,7 @@ int main(int argc, char **argv)
 
   while (!doneProcessing)
   {
-    usleep(1000000);
+    usleep(100000);
   }
   exit(EXIT_SUCCESS);
 }

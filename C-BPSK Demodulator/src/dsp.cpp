@@ -2,6 +2,9 @@
 #include <functional>
 #include "utils.h"
 #include "dsp.h"
+#ifdef _WIN32
+#include <io.h>
+#endif
 
 void CBPSKDemodulatorDsp::initDSP(
     std::function<void(size_t, size_t, size_t)> pProgressCallback,
@@ -76,9 +79,27 @@ void CBPSKDemodulatorDsp::startDSP(std::string inputFilePath,
                                    bool pRrc_filter)
 {
     // Read startup variables
-    data_in_filesize = getFilesize(inputFilePath);
-    data_in = std::ifstream(inputFilePath, std::ios::binary);
-    data_out = std::ofstream(outputFilePath, std::ios::binary);
+    if (inputFilePath.compare("-") != 0)
+    {
+        data_in_filesize = getFilesize(inputFilePath);
+        freopen(inputFilePath.c_str(), "rb", stdin); // redirects standard input
+    }
+    else
+    {
+#ifdef _WIN32
+        _setmode(_fileno(stdin), O_BINARY);
+#endif
+    }
+    if (outputFilePath.compare("-") != 0)
+    {
+        freopen(outputFilePath.c_str(), "wb", stdout); // redirects standard output
+    }
+    else
+    {
+#ifdef _WIN32
+        _setmode(_fileno(stdout), O_BINARY);
+#endif
+    }
     noaa_deframer = pNoaa_deframer;
     noaaMode = pNoaa_deframer;
     meteorMode = !pNoaa_deframer;
@@ -112,16 +133,17 @@ void CBPSKDemodulatorDsp::startDSP(std::string inputFilePath,
 
 void CBPSKDemodulatorDsp::fileThreadFunction()
 {
-    while (!data_in.eof())
+    int readsz = 0;
+    while (!std::cin.eof())
     {
         // Get baseband, possibly convert to F32
         if (f32)
         {
-            data_in.read((char *)buffer, BUFFER_SIZE * sizeof(std::complex<float>));
+            std::cin.read((char *)buffer, BUFFER_SIZE * sizeof(std::complex<float>));
         }
         else if (i16)
         {
-            data_in.read((char *)buffer_i16, BUFFER_SIZE * sizeof(int16_t) * 2);
+            std::cin.read((char *)buffer_i16, BUFFER_SIZE * sizeof(int16_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 using namespace std::complex_literals;
@@ -130,7 +152,7 @@ void CBPSKDemodulatorDsp::fileThreadFunction()
         }
         else if (i8)
         {
-            data_in.read((char *)buffer_i8, BUFFER_SIZE * sizeof(int8_t) * 2);
+            std::cin.read((char *)buffer_i8, BUFFER_SIZE * sizeof(int8_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 using namespace std::complex_literals;
@@ -139,7 +161,7 @@ void CBPSKDemodulatorDsp::fileThreadFunction()
         }
         else if (w8)
         {
-            data_in.read((char *)buffer_u8, BUFFER_SIZE * sizeof(uint8_t) * 2);
+            std::cin.read((char *)buffer_u8, BUFFER_SIZE * sizeof(uint8_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 float imag = (buffer_u8[i * 2] - 127) * 0.004f;
@@ -151,6 +173,11 @@ void CBPSKDemodulatorDsp::fileThreadFunction()
 
         file_pipe->push(buffer, BUFFER_SIZE);
     }
+
+    //this is the only reliable way i found to stop the program
+    usleep(1000000); //let the other threads finish?
+    if (doneCallback)
+        doneCallback(); //you better have a done callback
 }
 
 void CBPSKDemodulatorDsp::agcThreadFunction()
@@ -285,8 +312,9 @@ void volk_32f_binary_slicer_8i_generic(int8_t *cVector, const float *aVector, un
 void CBPSKDemodulatorDsp::finalWriteThreadFunction()
 {
     int dat_size, frame_count = 0;
-    while (true)
+    while (true) //there is no break here!
     {
+
         dat_size = recovery_pipe->pop(recovered_buffer, BUFFER_SIZE);
 
         if (dat_size <= 0)
@@ -315,22 +343,16 @@ void CBPSKDemodulatorDsp::finalWriteThreadFunction()
 
             // Write to file
             if (frames.size() > 0)
-                data_out.write((char *)&frames[0], frames.size() * sizeof(uint16_t));
+                std::cout.write((char *)&frames[0], frames.size() * sizeof(uint16_t));
         }
         else
         {
             std::vector<uint8_t> bytes = getBytes(bitsBuffer, dat_size);
             if (bytes.size() > 0)
-                data_out.write((char *)&bytes[0], bytes.size());
+                std::cout.write((char *)&bytes[0], bytes.size());
         }
 
         if (progressCallback)
-            progressCallback((size_t)data_in.tellg(), data_in_filesize, frame_count / 11090); // Each frame is 11090 bytes
+            progressCallback((size_t)std::cin.tellg(), data_in_filesize, frame_count / 11090); // Each frame is 11090 bytes
     }
-
-    data_in.close();
-    data_out.close();
-
-    if (doneCallback)
-        doneCallback();
 }
