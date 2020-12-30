@@ -173,6 +173,10 @@ void QPSKDemodulatorDSP::fileThreadFunction()
         else
             pre_agc_pipe->push(buffer, BUFFER_SIZE);
     }
+    //this is the only reliable way i found to stop the program
+    usleep(1000000); //let the other threads finish?
+    if (doneCallback)
+        doneCallback(); //you better have a done callback
 }
 
 void QPSKDemodulatorDSP::agcThreadFunction()
