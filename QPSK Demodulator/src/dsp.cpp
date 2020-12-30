@@ -32,6 +32,10 @@ void QPSKDemodulatorDSP::initDSP(
     pre_pll_pipe = new libdsp::Pipe<std::complex<float>>(BUFFER_SIZE);
     post_pll_pipe = new libdsp::Pipe<std::complex<float>>(BUFFER_SIZE);
     post_reco_pipe = new libdsp::Pipe<std::complex<float>>(BUFFER_SIZE);
+
+    progressCallback=pProgressCallback;
+    doneCallback=pDoneCallback;
+    constellationCallback=pConstellationCallback;
 }
 
 void QPSKDemodulatorDSP::destroyDSP()
@@ -133,6 +137,7 @@ void QPSKDemodulatorDSP::fileThreadFunction()
 {
     while (!std::cin.eof())
     {
+        
         // Get baseband, possibly convert to F32
         if (f32)
         {
