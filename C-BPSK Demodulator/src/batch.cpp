@@ -22,6 +22,11 @@ void usage(FILE *fp, const char *path)
               "Input file, - for STDIN (defaults to -)\n");
   fprintf(fp, "  -o FILENAME, --output FILENAME\t"
               "Output file, - for STDOUT (defaults to -)\n");
+
+  fprintf(fp, "  -s SAMPLERATE, --samplereate SAMPLERATE\t"
+              "Input sample rate. Defaults to 6000000 (6MS/s).\n");
+  fprintf(fp, "  -p PRESET, --preset PRESET (required)\t"
+              "Satellite preset. Either 'noaa' or 'meteor'\n");
 }
 
 void done()
@@ -42,7 +47,7 @@ int main(int argc, char **argv)
   char infile[256] = "-";
   char outfile[256] = "-";
   char preset = -1;
-
+  int samplerate = 6000000;
   while (1)
   {
     int this_option_optind = optind ? optind : 1;
@@ -51,10 +56,11 @@ int main(int argc, char **argv)
         {"input", required_argument, NULL, 'i'},
         {"output", required_argument, NULL, 'o'},
         {"preset", required_argument, NULL, 'p'},
+        {"samplerate", required_argument, NULL, 's'},
         {"help", no_argument, &help_flag, 1},
         {0, 0, 0, 0}};
 
-    c = getopt_long(argc, argv, "i:o:p:h",
+    c = getopt_long(argc, argv, "s:i:o:p:h",
                     long_options, &option_index);
     if (c == -1)
       break;
@@ -75,6 +81,10 @@ int main(int argc, char **argv)
       strncpy(outfile, optarg ? optarg : "-", sizeof(outfile));
       /* strncpy does not fully guarantee null-termination */
       outfile[sizeof(outfile) - 1] = '\0';
+      break;
+
+    case 's':
+      samplerate = atoi(optarg);
       break;
 
     case 'p':
@@ -104,6 +114,7 @@ int main(int argc, char **argv)
   fprintf(stderr, "Input: %s\n", infile);
   fprintf(stderr, "Output: %s\n", outfile);
   fprintf(stderr, "Preset: %d\n\n", preset);
+  fprintf(stderr, "Samplerate: %d\n\n", samplerate);
 
   auto dsp = new CBPSKDemodulatorDsp();
   dsp->initDSP(progress, done, NULL);
@@ -113,7 +124,6 @@ int main(int argc, char **argv)
   bool optionI8 = 0;
   bool optionW8 = 0;
 
-  int samplerateEntry = 6000000;
   int symbolrateEntry = 665400;
   float rrcAlphaEntry = 0.5;
   float rrcTapsEntry = 31;
@@ -133,7 +143,7 @@ int main(int argc, char **argv)
                 optionI16,
                 optionI8,
                 optionW8,
-                samplerateEntry,
+                samplerate,
                 symbolrateEntry,
                 rrcAlphaEntry,
                 rrcTapsEntry,
