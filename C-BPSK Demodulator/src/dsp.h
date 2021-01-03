@@ -3,7 +3,6 @@
 #include <functional>
 
 
-#include "constellation.h"
 #include <fstream>
 #include <thread>
 
