@@ -20,7 +20,7 @@
 #include "dsp.h"
 #include "dsp/noaa_deframer.h"
 
-#define BUFFER_SIZE 4096
+
 
 class CBPSKDemodulatorApp : public wxApp
 {
