@@ -4,8 +4,8 @@
 
 
 #include <fstream>
-#include <thread>
 
+#define BUFFER_SIZE 4096
 #include <dsp/agc.h>
 #include <dsp/fir_filter.h>
 #include <dsp/fir_gen.h>
@@ -17,7 +17,7 @@
 #include "dsp.h"
 #include "dsp/noaa_deframer.h"
 #include "utils.h"
-
+#include <thread>
 class CBPSKDemodulatorDsp
 {
 public:

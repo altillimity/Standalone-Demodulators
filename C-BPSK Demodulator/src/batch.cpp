@@ -1,7 +1,7 @@
 #include <iostream>
 #include <getopt.h>
 #include <unistd.h>
-
+#include <cstring>
 #include "dsp.h"
 #include <functional>
 
