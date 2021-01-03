@@ -16,7 +16,6 @@ find_package(wxWidgets COMPONENTS core base REQUIRED)
 include(${wxWidgets_USE_FILE})
 
 target_link_libraries(C-BPSK-Demodulator PUBLIC ${wxWidgets_LIBRARIES})
-target_link_libraries(C-BPSK-Demodulator-Batch PUBLIC ${wxWidgets_LIBRARIES})
 
 
 find_library(DSP_LIBRARY dsp REQUIRED)
