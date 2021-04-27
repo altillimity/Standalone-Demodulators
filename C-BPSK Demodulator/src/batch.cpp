@@ -37,7 +37,12 @@ void done()
 
 void progress(size_t c, size_t t, size_t fc)
 {
+  static int n=0;
+  n++;
+  if(n==100) {
   std::cerr << c << "/" << t << " - " << fc << "                     \r"; // Changed
+  n=0;
+  }
 }
 
 int main(int argc, char **argv)

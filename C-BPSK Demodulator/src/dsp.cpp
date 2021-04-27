@@ -172,6 +172,7 @@ void CBPSKDemodulatorDsp::fileThreadFunction()
         }
 
         file_pipe->push(buffer, BUFFER_SIZE);
+        usleep(10);
     }
 
     //this is the only reliable way i found to stop the program
