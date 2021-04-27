@@ -1,12 +1,17 @@
 #include "window.h"
-
+#include <functional>
 CBPSKDemodulatorFrame::CBPSKDemodulatorFrame() : wxFrame(NULL, wxID_ANY, "Carrier BPSK Demodulator (by Aang23)")
 {
 }
 
 bool CBPSKDemodulatorApp::OnInit()
 {
-    initDSP();
+    using namespace std::placeholders;
+    dsp = new CBPSKDemodulatorDsp();
+    auto up = std::bind(&CBPSKDemodulatorApp::updateProgress, this, _1, _2, _3);
+    auto d = std::bind(&CBPSKDemodulatorApp::done, this);
+    auto uc = std::bind(&CBPSKDemodulatorApp::updateConstellation, this, _1, _2, _3);
+    dsp->initDSP(up, d, uc);
 
     CBPSKDemodulatorFrame *frame = new CBPSKDemodulatorFrame();
 #ifdef __linux__
@@ -112,7 +117,18 @@ bool CBPSKDemodulatorApp::OnInit()
         }
         else if (event.GetId() == 6)
         {
-            startDSP();
+            dsp->startDSP(inputFilePath,
+                          outputFilePath,
+                          optionF32->GetValue(),
+                          optionI16->GetValue(),
+                          optionI8->GetValue(),
+                          optionW8->GetValue(),
+                          std::stof((std::string)samplerateEntry->GetValue()),
+                          std::stof((std::string)symbolrateEntry->GetValue()),
+                          std::stof((std::string)rrcAlphaEntry->GetValue()),
+                          std::stof((std::string)rrcTapsEntry->GetValue()),
+                          noaaDeframerOption->IsChecked(),
+                          frontRRCOption->IsChecked());
             startButton->Disable();
         }
     });
@@ -123,4 +139,27 @@ bool CBPSKDemodulatorApp::OnInit()
     frame->Show(true);
 
     return true;
+}
+
+void CBPSKDemodulatorApp::updateProgress(size_t current, size_t total, size_t frame_count)
+{
+    int percent = abs(round(((float)current / (float)total) * 1000.0f) / 10.0f);
+
+    wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
+        progressbar->SetValue(percent);
+        progressLabel->SetLabelText(std::string("Progress : " + std::to_string(percent) + "%, Frames : " + std::to_string(meteorMode ? frame_count : frame_count / 11090) + "   "));
+        drawPane->Refresh();
+    });
+}
+
+void CBPSKDemodulatorApp::done()
+{
+    wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
+        startButton->Enable();
+    });
+}
+void CBPSKDemodulatorApp::updateConstellation(int8_t a, int8_t b, int i)
+{
+    drawPane->constellation_buffer[i * 2] = a;
+    drawPane->constellation_buffer[i * 2 + 1] = b;
 }

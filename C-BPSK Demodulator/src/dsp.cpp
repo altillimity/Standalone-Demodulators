@@ -1,8 +1,15 @@
-#include "window.h"
-
+#include <functional>
+#include <iostream>
 #include "utils.h"
+#include "dsp.h"
+#ifdef _WIN32
+#include <io.h>
+#endif
 
-void CBPSKDemodulatorApp::initDSP()
+void CBPSKDemodulatorDsp::initDSP(
+    std::function<void(size_t, size_t, size_t)> pProgressCallback,
+    std::function<void(void)> pDoneCallback,
+    std::function<void(int8_t, int8_t, int)> pConstellationCallback)
 {
     // Buffers
     buffer = new std::complex<float>[BUFFER_SIZE * 10];
@@ -29,9 +36,14 @@ void CBPSKDemodulatorApp::initDSP()
     pll_pipe = new libdsp::Pipe<float>(BUFFER_SIZE);
     rrc_pipe = new libdsp::Pipe<float>(BUFFER_SIZE);
     recovery_pipe = new libdsp::Pipe<float>(BUFFER_SIZE);
+
+    // Callbacks
+    progressCallback = pProgressCallback;
+    doneCallback = pDoneCallback;
+    constellationCallback = pConstellationCallback;
 }
 
-void CBPSKDemodulatorApp::destroyDSP()
+void CBPSKDemodulatorDsp::destroyDSP()
 {
     delete[] buffer;
     delete[] agc_buffer;
@@ -53,25 +65,45 @@ void CBPSKDemodulatorApp::destroyDSP()
     delete file_pipe, agc_pipe, front_rrc_pipe, pll_pipe, pll_pipe, recovery_pipe;
 }
 
-void CBPSKDemodulatorApp::startDSP()
+void CBPSKDemodulatorDsp::startDSP(std::string inputFilePath,
+                                   std::string outputFilePath,
+                                   bool optionF32,
+                                   bool optionI16,
+                                   bool optionI8,
+                                   bool optionW8,
+                                   float samplerate,
+                                   float symbolrate,
+                                   float rrc_alpha,
+                                   float rrc_taps,
+                                   bool pNoaa_deframer,
+                                   bool pRrc_filter)
 {
     // Read startup variables
-    data_in_filesize = getFilesize(inputFilePath);
-    data_in = std::ifstream(inputFilePath, std::ios::binary);
-    data_out = std::ofstream(outputFilePath, std::ios::binary);
-
-    f32 = optionF32->GetValue();
-    i16 = optionI16->GetValue();
-    i8 = optionI8->GetValue();
-    w8 = optionW8->GetValue();
-
-    samplerate = std::stof((std::string)samplerateEntry->GetValue());
-    symbolrate = std::stof((std::string)symbolrateEntry->GetValue());
-    rrc_alpha = std::stof((std::string)rrcAlphaEntry->GetValue());
-    rrc_taps = std::stof((std::string)rrcTapsEntry->GetValue());
-
-    noaa_deframer = noaaDeframerOption->IsChecked();
-    rrc_filter = frontRRCOption->IsChecked();
+    if (inputFilePath.compare("-") != 0)
+    {
+        data_in_filesize = getFilesize(inputFilePath);
+        freopen(inputFilePath.c_str(), "rb", stdin); // redirects standard input
+    }
+    else
+    {
+#ifdef _WIN32
+        _setmode(_fileno(stdin), O_BINARY);
+#endif
+    }
+    if (outputFilePath.compare("-") != 0)
+    {
+        freopen(outputFilePath.c_str(), "wb", stdout); // redirects standard output
+    }
+    else
+    {
+#ifdef _WIN32
+        _setmode(_fileno(stdout), O_BINARY);
+#endif
+    }
+    noaa_deframer = pNoaa_deframer;
+    noaaMode = pNoaa_deframer;
+    meteorMode = !pNoaa_deframer;
+    rrc_filter = pRrc_filter;
 
     // Init our blocks
     agc = new libdsp::AgcCC(meteorMode ? 0.0038e-3f : 0.002e-3f, 1.0f, 0.5f / 32768.0f, 65536);
@@ -84,28 +116,34 @@ void CBPSKDemodulatorApp::startDSP()
     noise_source = new libdsp::NoiseSource(libdsp::NS_GAUSSIAN, 0.2f, 0);
 
     // Start everything
-    fileThread = new std::thread(&CBPSKDemodulatorApp::fileThreadFunction, this);
-    agcThread = new std::thread(&CBPSKDemodulatorApp::agcThreadFunction, this);
+    fileThread = new std::thread(&CBPSKDemodulatorDsp::fileThreadFunction, this);
+    agcThread = new std::thread(&CBPSKDemodulatorDsp::agcThreadFunction, this);
     if (rrc_filter)
-        frontRrcThread = new std::thread(&CBPSKDemodulatorApp::frontRrcThreadFunction, this);
-    rrcThread = new std::thread(&CBPSKDemodulatorApp::rrcThreadFunction, this);
-    pllThread = new std::thread(&CBPSKDemodulatorApp::pllThreadFunction, this);
-    clockrecoveryThread = new std::thread(&CBPSKDemodulatorApp::clockrecoveryThreadFunction, this);
-    finalWriteThread = new std::thread(&CBPSKDemodulatorApp::finalWriteThreadFunction, this);
+        frontRrcThread = new std::thread(&CBPSKDemodulatorDsp::frontRrcThreadFunction, this);
+    rrcThread = new std::thread(&CBPSKDemodulatorDsp::rrcThreadFunction, this);
+    pllThread = new std::thread(&CBPSKDemodulatorDsp::pllThreadFunction, this);
+    clockrecoveryThread = new std::thread(&CBPSKDemodulatorDsp::clockrecoveryThreadFunction, this);
+    finalWriteThread = new std::thread(&CBPSKDemodulatorDsp::finalWriteThreadFunction, this);
+
+    f32 = optionF32;
+    i16 = optionI16;
+    i8 = optionI8;
+    w8 = optionW8;
 }
 
-void CBPSKDemodulatorApp::fileThreadFunction()
+void CBPSKDemodulatorDsp::fileThreadFunction()
 {
-    while (!data_in.eof())
+    int readsz = 0;
+    while (!std::cin.eof())
     {
         // Get baseband, possibly convert to F32
         if (f32)
         {
-            data_in.read((char *)buffer, BUFFER_SIZE * sizeof(std::complex<float>));
+            std::cin.read((char *)buffer, BUFFER_SIZE * sizeof(std::complex<float>));
         }
         else if (i16)
         {
-            data_in.read((char *)buffer_i16, BUFFER_SIZE * sizeof(int16_t) * 2);
+            std::cin.read((char *)buffer_i16, BUFFER_SIZE * sizeof(int16_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 using namespace std::complex_literals;
@@ -114,7 +152,7 @@ void CBPSKDemodulatorApp::fileThreadFunction()
         }
         else if (i8)
         {
-            data_in.read((char *)buffer_i8, BUFFER_SIZE * sizeof(int8_t) * 2);
+            std::cin.read((char *)buffer_i8, BUFFER_SIZE * sizeof(int8_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 using namespace std::complex_literals;
@@ -123,7 +161,7 @@ void CBPSKDemodulatorApp::fileThreadFunction()
         }
         else if (w8)
         {
-            data_in.read((char *)buffer_u8, BUFFER_SIZE * sizeof(uint8_t) * 2);
+            std::cin.read((char *)buffer_u8, BUFFER_SIZE * sizeof(uint8_t) * 2);
             for (int i = 0; i < BUFFER_SIZE; i++)
             {
                 float imag = (buffer_u8[i * 2] - 127) * 0.004f;
@@ -134,10 +172,16 @@ void CBPSKDemodulatorApp::fileThreadFunction()
         }
 
         file_pipe->push(buffer, BUFFER_SIZE);
+        usleep(10);
     }
+
+    //this is the only reliable way i found to stop the program
+    usleep(1000000); //let the other threads finish?
+    if (doneCallback)
+        doneCallback(); //you better have a done callback
 }
 
-void CBPSKDemodulatorApp::agcThreadFunction()
+void CBPSKDemodulatorDsp::agcThreadFunction()
 {
     int gotten;
     while (true)
@@ -154,7 +198,7 @@ void CBPSKDemodulatorApp::agcThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::frontRrcThreadFunction()
+void CBPSKDemodulatorDsp::frontRrcThreadFunction()
 {
     int gotten;
     while (true)
@@ -171,7 +215,7 @@ void CBPSKDemodulatorApp::frontRrcThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::pllThreadFunction()
+void CBPSKDemodulatorDsp::pllThreadFunction()
 {
     int gotten;
     while (true)
@@ -188,7 +232,7 @@ void CBPSKDemodulatorApp::pllThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::rrcThreadFunction()
+void CBPSKDemodulatorDsp::rrcThreadFunction()
 {
     int gotten;
     while (true)
@@ -209,7 +253,7 @@ void CBPSKDemodulatorApp::rrcThreadFunction()
     }
 }
 
-void CBPSKDemodulatorApp::clockrecoveryThreadFunction()
+void CBPSKDemodulatorDsp::clockrecoveryThreadFunction()
 {
     int gotten;
     while (true)
@@ -266,11 +310,12 @@ void volk_32f_binary_slicer_8i_generic(int8_t *cVector, const float *aVector, un
     }
 }
 
-void CBPSKDemodulatorApp::finalWriteThreadFunction()
+void CBPSKDemodulatorDsp::finalWriteThreadFunction()
 {
     int dat_size, frame_count = 0;
-    while (true)
+    while (true) //there is no break here!
     {
+
         dat_size = recovery_pipe->pop(recovered_buffer, BUFFER_SIZE);
 
         if (dat_size <= 0)
@@ -282,10 +327,9 @@ void CBPSKDemodulatorApp::finalWriteThreadFunction()
         {
             int8_t symb_real = clamp(recovered_buffer[i] * 90);
 
-            if (i < 1024)
+            if (constellationCallback && (i < 1024))
             {
-                drawPane->constellation_buffer[i * 2] = noise_buffer[i] * 80;
-                drawPane->constellation_buffer[i * 2 + 1] = symb_real;
+                constellationCallback(noise_buffer[i] * 80, symb_real, i);
             }
         }
 
@@ -300,28 +344,16 @@ void CBPSKDemodulatorApp::finalWriteThreadFunction()
 
             // Write to file
             if (frames.size() > 0)
-                data_out.write((char *)&frames[0], frames.size() * sizeof(uint16_t));
+                std::cout.write((char *)&frames[0], frames.size() * sizeof(uint16_t));
         }
         else
         {
             std::vector<uint8_t> bytes = getBytes(bitsBuffer, dat_size);
             if (bytes.size() > 0)
-                data_out.write((char *)&bytes[0], bytes.size());
+                std::cout.write((char *)&bytes[0], bytes.size());
         }
 
-        int percent = abs(round(((float)data_in.tellg() / (float)data_in_filesize) * 1000.0f) / 10.0f);
-
-        wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
-            progressbar->SetValue(percent);
-            progressLabel->SetLabelText(std::string("Progress : " + std::to_string(percent) + "%, Frames : " + std::to_string(meteorMode ? frame_count : frame_count / 11090) + "   "));
-            drawPane->Refresh();
-        });
+        if (progressCallback)
+            progressCallback((size_t)std::cin.tellg(), data_in_filesize, frame_count / 11090); // Each frame is 11090 bytes
     }
-
-    data_in.close();
-    data_out.close();
-
-    wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
-        startButton->Enable();
-    });
 }

@@ -6,7 +6,12 @@ QPSKDemodulatorFrame::QPSKDemodulatorFrame() : wxFrame(NULL, wxID_ANY, "QPSK Dem
 
 bool QPSKDemodulatorApp::OnInit()
 {
-    initDSP();
+    using namespace std::placeholders;
+    dsp = new QPSKDemodulatorDSP();
+    auto up = std::bind(&QPSKDemodulatorApp::updateProgress, this, _1);
+    auto d = std::bind(&QPSKDemodulatorApp::done, this);
+    auto uc = std::bind(&QPSKDemodulatorApp::updateConstellation, this, _1, _2, _3);
+    dsp->initDSP(up, d, uc);
 
     QPSKDemodulatorFrame *frame = new QPSKDemodulatorFrame();
 #ifdef __linux__
@@ -200,7 +205,23 @@ bool QPSKDemodulatorApp::OnInit()
         }
         else if (event.GetId() == 6)
         {
-            startDSP();
+
+            dsp->startDSP(
+                inputFilePath,
+                outputFilePath,
+                optionF32->GetValue(),
+                optionI16->GetValue(),
+                optionI8->GetValue(),
+                optionW8->GetValue(),
+                std::stof((std::string)samplerateEntry->GetValue()),
+                std::stof((std::string)symbolrateEntry->GetValue()),
+                std::stof((std::string)rrcAlphaEntry->GetValue()),
+                std::stof((std::string)rrcTapsEntry->GetValue()),
+                std::stof((std::string)loopBwEntry->GetValue()),
+                hardSymbolsOption->IsChecked(),
+                dcBlockOption->IsChecked(),
+                aquaMode,
+                hrptMode );
             startButton->Disable();
         }
     });
@@ -211,4 +232,26 @@ bool QPSKDemodulatorApp::OnInit()
     frame->Show(true);
 
     return true;
+}
+
+void QPSKDemodulatorApp::updateProgress(int percent)
+{
+        wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
+        progressbar->SetValue(percent);
+        progressLabel->SetLabelText(std::string("Progress : " + std::to_string(percent) + "%"));
+        drawPane->Refresh();
+        });
+}
+
+void QPSKDemodulatorApp::done()
+{
+        wxTheApp->GetTopWindow()->GetEventHandler()->CallAfter([=]() {
+            startButton->Enable();
+        });
+}
+
+void QPSKDemodulatorApp::updateConstellation(int8_t symb_real, int8_t symb_imag, int i)
+{
+        drawPane->constellation_buffer[i * 2 + 1] = symb_real;
+        drawPane->constellation_buffer[i * 2] = symb_imag;
 }
